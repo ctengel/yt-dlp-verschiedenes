@@ -23,10 +23,13 @@ class PoculumIE(InfoExtractor):
         # extract post metadata
         slug = post.attrib.get('slug')
         pid = post.attrib.get('id')
-        uploader_id = post.attrib.get('reblogged-root-name', blog)
+        uploader_id = post.attrib.get('reblogged-root-name') or post.attrib.get('reblogged-from-name') or blog
         repost_count = int_or_none(post.attrib.get('notes'))
         post_url = url_or_none(post.attrib.get('url'))  # TODO is this correct format???
         timestamp = int_or_none(post.attrib['unix-timestamp'])
+        og_url = url_or_none(post.attrib.get('reblogged-root-url')) or url_or_none(post.attrib.get('reblogged-from-url')) or post_url
+        if not post_url and og_url:
+            post_url = og_url
 
         # Look for a video URL
         self.to_screen(f'Looking for video in {pid}-{slug}...')
@@ -41,8 +44,8 @@ class PoculumIE(InfoExtractor):
                 if re.match(r"^https?\:\/\/.+\.mp4$", link):
                     self.to_screen(f"Found video {link} !")
                     return {
-                        "id": url_basename(link),
-                        "title": slug or blog,  # TODO try to use post title
+                        "id": url_basename(link),  # TODO this should really be the ID portion of the filename only
+                        "title": slug or f"{blog}-{pid}",  # TODO try to use post title
                         "uploader_id": uploader_id,
                         "uploader": uploader_id,
                         "channel_id": blog,
@@ -51,12 +54,12 @@ class PoculumIE(InfoExtractor):
                         'uploader_url': f'https://{uploader_id}.tumblr.com/',
                         'repost_count': repost_count,
                         "url": link,
-                        "display_id": f"{pid}-{slug}" if slug else pid,
+                        "display_id": f"{blog}-{pid}-{slug}" if slug else f"{blog}-{pid}",
                         "ext": "mp4",
                         "is_live": False,
                         "protocol": "https",
                         "timestamp": timestamp,
-                        "webpage_url": post_url
+                        "webpage_url": og_url
                         # TODO "description" (video-caption or regular-body)?
                         # TODO duration
                         # TODO thumbnail
