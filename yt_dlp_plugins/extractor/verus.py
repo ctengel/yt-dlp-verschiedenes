@@ -10,7 +10,7 @@ from yt_dlp.utils import (
 
 
 class VerusIE(InfoExtractor):
-    _VALID_URL = r'verus://(?P<id>(?:[^/]+)?/*+'
+    _VALID_URL = r'verus://(?P<id>[^/]+)?/*+'
     _WORKING = False
 
     def _extract_entries(self, url, playlist_id):
