@@ -11,6 +11,7 @@ from yt_dlp.utils import (
 class MarcusIE(InfoExtractor):
     _WORKING = False
     _VALID_URL = r'https://api\.streamspot\.com/broadcaster/(?P<id>[^/]+)/videos.*'
+    _RETURN_TYPE = 'playlist'
 
     def _real_extract(self, url):
 

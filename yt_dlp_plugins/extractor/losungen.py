@@ -7,6 +7,7 @@ class LosungenIE(InfoExtractor):
     _WORKING = False
     _TESTS = []
     _VALID_URL = r'losungen://(?P<site_domain>[^:]+):(?P<secret_key>\d+)\@(?P<domain>[^/]+)/(?P<path>[^/]+)/(?P<filename>[^/]+)$'
+    _RETURN_TYPE = 'playlist'
 
     def _time_to_seconds(self, time_str):
         if not time_str:

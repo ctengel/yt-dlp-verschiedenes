@@ -12,6 +12,7 @@ from yt_dlp.utils import (
 class VerusIE(InfoExtractor):
     _VALID_URL = r'verus://(?P<id>[^/]+)?/*+'
     _WORKING = False
+    _RETURN_TYPE = 'playlist'
 
     def _extract_entries(self, url, playlist_id):
         webpage = self._download_webpage(url, playlist_id)

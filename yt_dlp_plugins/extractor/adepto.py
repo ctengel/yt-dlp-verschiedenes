@@ -13,6 +13,7 @@ class AdeptoIE(InfoExtractor):
     _WORKING = False
     _TESTS = []
     _VALID_URL = r'adepto://[^/]+/.+'
+    _RETURN_TYPE = 'playlist'
 
     VIDEO_EXTENSIONS = ('.mp4',)  #, '.m4v', '.mov')
     IMAGE_EXTENSIONS = ('.jpg', '.jpeg')  #, '.png', '.webp')

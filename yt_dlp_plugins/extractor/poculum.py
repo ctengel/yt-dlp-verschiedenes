@@ -16,6 +16,7 @@ class PoculumIE(InfoExtractor):
     _VALID_URL = r'https?://(?P<blog_name_1>[^/?#&]+)\.tumblr\.com/(?P<blog_name_2>[a-zA-Z\d-]+)?$'
     _TESTS = []  # TODO build tests
     _PAGE_LIMIT = 50
+    _RETURN_TYPE = 'playlist'
 
     def _extract_entry(self, post, blog):
         """Extract a video entry from a post element"""
