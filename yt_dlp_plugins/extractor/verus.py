@@ -57,21 +57,14 @@ class VerusIE(InfoExtractor):
                 fatal=False
             )
 
-            # --- TAG EXTRACTION ---
             tags_section = self._html_search_regex(
                 r'Tags:\s*(.+?)</div>',
                 block,
                 'tags section',
-                fatal=False
+                fatal=False,
+                flags=re.DOTALL,
             )
-
-            tags = []
-            if tags_section:
-                tags = re.findall(
-                    r'>([^<]+)</a>',
-                    tags_section
-                )
-                tags = [clean_html(tag).strip() for tag in tags]
+            tags = [clean_html(t).strip() for t in re.findall(r'>([^<]+)</a>', tags_section or '')]
 
             entries.append({
                 'id': trailer_path.rsplit('/', 1)[-1].replace('.mp4', ''),
