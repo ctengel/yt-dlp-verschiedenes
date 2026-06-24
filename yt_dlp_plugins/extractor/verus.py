@@ -109,5 +109,5 @@ class VerusIE(InfoExtractor):
         return self.playlist_result(
             entries,
             playlist_id=playlist_id,
-            playlist_title=f""
+            playlist_title=playlist_id
         )
