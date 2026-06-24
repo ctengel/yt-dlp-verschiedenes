@@ -1,5 +1,6 @@
 """Solution extractor"""
 from yt_dlp.extractor.common import InfoExtractor
+from yt_dlp.utils import parse_duration
 
 class LosungenIE(InfoExtractor):
     """Extractor for Losungen"""
@@ -9,12 +10,6 @@ class LosungenIE(InfoExtractor):
     _VALID_URL = r'losungen://(?P<site_domain>[^:]+):(?P<secret_key>\d+)\@(?P<domain>[^/]+)/(?P<path>[^/]+)/(?P<filename>[^/]+)$'
     _RETURN_TYPE = 'playlist'
 
-    def _time_to_seconds(self, time_str):
-        if not time_str:
-            return None
-        hours, minutes, seconds = map(int, time_str.split(':'))
-        return hours * 3600 + minutes * 60 + seconds
-
     def _extract_entry(self, data, base_video_url, site_domain, base_image_url):
         # TODO LPM
         site = data['site']
@@ -22,7 +17,7 @@ class LosungenIE(InfoExtractor):
         video_url = base_video_url + full_name + '.mp4'
         image_url = base_image_url + full_name + '.jpg'
         site_url = f'https://{site_domain}/'
-        duration = self._time_to_seconds(data['duration'])
+        duration = parse_duration(data.get('duration'))
         return {
             'id': data['_id'],
             'channel_id': site,
