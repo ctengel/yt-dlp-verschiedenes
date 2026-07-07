@@ -21,7 +21,7 @@ class VereinigtIE(InfoExtractor):
         r'/thumbnail[^"\']*\.jpg)["\']'
     )
 
-    def _extract_entry(self, block):
+    def _extract_entry(self, block, page_url, referer):
         """Build a full video dict from one ``<article>`` block, or None."""
         thumb = self._search_regex(
             self._THUMB_RE, block, 'thumbnail', group=('thumb', 'prefix'),
@@ -30,9 +30,9 @@ class VereinigtIE(InfoExtractor):
         if not prefix:
             return None
 
-        slug = self._search_regex(
-            r'href=["\'][^"\']*/videos/(?P<slug>[^/"\']+)/?["\']',
-            block, 'slug', default=None)
+        href, slug = self._search_regex(
+            r'href=["\'](?P<href>[^"\']*/videos/(?P<slug>[^/"\']+)/?)["\']',
+            block, 'permalink', group=('href', 'slug'), default=(None, None))
 
         title = self._search_regex(
             r'<img[^>]+\balt=["\']([^"\']+)["\']', block, 'title',
@@ -52,12 +52,14 @@ class VereinigtIE(InfoExtractor):
             'duration': duration,
             'thumbnail': thumb_url,
             'url': f'{prefix}/playlist.m3u8',
+            'webpage_url': urljoin(page_url, href) if href else None,
             'ext': 'mp4',
             'protocol': 'm3u8_native',
+            'http_headers': {'Referer': referer},
             'is_live': False,
         }
 
-    def _page_entries(self, page_url, playlist_id, page_num):
+    def _page_entries(self, page_url, playlist_id, page_num, referer):
         webpage = self._download_webpage(
             page_url, playlist_id, fatal=False,
             note=f'Downloading listing page {page_num}')
@@ -66,7 +68,7 @@ class VereinigtIE(InfoExtractor):
         blocks = re.split(r'(?=<article class="entry)', webpage)[1:]
         entries = []
         for block in blocks:
-            entry = self._extract_entry(block)
+            entry = self._extract_entry(block, page_url, referer)
             if entry:
                 entries.append(entry)
         return entries
@@ -83,11 +85,12 @@ class VereinigtIE(InfoExtractor):
             start = 1
         base_url = urlunparse(parsed._replace(path=base_path))
         playlist_id = base_path.strip('/').split('/')[-1] or parsed.netloc
+        referer = f'https://{parsed.netloc}/'
 
         entries = []
         for page_num in itertools.count(start):
             page_url = base_url if page_num == 1 else urljoin(base_url, f'page/{page_num}/')
-            page_entries = self._page_entries(page_url, playlist_id, page_num)
+            page_entries = self._page_entries(page_url, playlist_id, page_num, referer)
             if not page_entries:
                 break
             entries.extend(page_entries)
