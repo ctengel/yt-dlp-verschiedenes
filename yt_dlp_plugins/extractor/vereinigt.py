@@ -51,7 +51,7 @@ class VereinigtIE(InfoExtractor):
     _THUMB_RE = (
         r'src=["\'](?P<thumb>https?://(?P<cdn>[^/"\']+)/'
         r'(?P<guid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'
-        r'/thumbnail[^"\']*\.jpg)["\']'
+        r'/thumbnail[^"\']*\.jpg(?:\?[^"\']*)?)["\']'
     )
 
     def _extract_entry(self, block, site):
