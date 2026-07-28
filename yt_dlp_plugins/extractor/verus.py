@@ -61,6 +61,18 @@ class VerusListInfoExtractor(InfoExtractor):
             entries.extend(page_entries)
         return entries
 
+    def _blocks(self, webpage, marker):
+        """Split a listing page into item blocks, dropping the page chrome.
+
+        A lookahead split keeps everything before the first block as a chunk of
+        its own. Past the end of a listing there are no blocks at all -- and
+        these sites answer 200 for any page number -- so that chunk would be
+        the whole document, whose navigation anchors look enough like an entry
+        to keep pagination running forever.
+        """
+        return [block for block in re.split(f'(?={re.escape(marker)})', webpage)
+                if block.startswith(marker)]
+
     def _page_urls(self, url):
         """Yield ``(page number, url)`` for each successive listing page."""
         raise NotImplementedError('subclass must implement _page_urls')
@@ -125,7 +137,7 @@ class VerusIE(VerusListInfoExtractor):
 
     def _page_entries(self, webpage, page_url):
         entries = []
-        for block in re.split(r'(?=<div class="update_block">)', webpage):
+        for block in self._blocks(webpage, '<div class="update_block">'):
             entry = self._extract_entry(block, page_url)
             if entry:
                 entries.append(entry)
@@ -217,7 +229,7 @@ class VerusAuthIE(VerusListInfoExtractor):
 
     def _page_entries(self, webpage, page_url):
         entries, seen = [], set()
-        for block in re.split(r'(?=<div class="update_details")', webpage):
+        for block in self._blocks(webpage, '<div class="update_details"'):
             entry = self._extract_entry(block, page_url)
             # A page can list the same set twice (e.g. featured plus regular).
             if entry and entry['url'] not in seen:
