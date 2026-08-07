@@ -3,17 +3,34 @@ import itertools
 import re
 from yt_dlp.extractor.common import InfoExtractor
 from yt_dlp.utils import (
+    clean_html,
     int_or_none,
     url_or_none,
     url_basename
 )
 
 
+def _blog_name_from_url(url):
+    """Derive a blog name from a post/blog URL, if possible"""
+    if not url:
+        return None
+    mobj = re.match(
+        r'https?://(?:(?P<sub>[^./]+)\.tumblr\.com|(?:www\.)?tumblr\.com/(?:blog/view/)?(?P<path>[^/?#]+))',
+        url)
+    if not mobj:
+        return None
+    name = mobj.group('sub') or mobj.group('path')
+    return name if name != 'www' else None
+
+
 class PoculumIE(InfoExtractor):
     """v1 API for whole blog, focused on native video posts"""
 
     _WORKING = False  # TODO set to True when stable
-    _VALID_URL = r'https?://(?P<blog_name_1>[^/?#&]+)\.tumblr\.com/(?P<blog_name_2>[a-zA-Z\d-]+)?$'
+    _VALID_URL = r'''(?x)^(?:
+        https?://(?P<blog_name_1>[^/?#&]+)\.tumblr\.com/(?P<blog_name_2>[a-zA-Z\d-]+)?$
+        |poculum://(?P<blog_name_3>[^/?#&]+)\.tumblr\.com/post/(?P<post_id>\d+)(?:/[^/?#]*)?$
+    )'''
     _TESTS = []  # TODO build tests
     _PAGE_LIMIT = 50
     _RETURN_TYPE = 'playlist'
@@ -24,16 +41,45 @@ class PoculumIE(InfoExtractor):
         # extract post metadata
         slug = post.attrib.get('slug')
         pid = post.attrib.get('id')
-        uploader_id = post.attrib.get('reblogged-root-name') or post.attrib.get('reblogged-from-name') or blog
         repost_count = int_or_none(post.attrib.get('notes'))
-        post_url = url_or_none(post.attrib.get('url'))  # TODO is this correct format???
+        post_url = url_or_none(post.attrib.get('url-with-slug')) or url_or_none(post.attrib.get('url'))
         timestamp = int_or_none(post.attrib['unix-timestamp'])
         og_url = url_or_none(post.attrib.get('reblogged-root-url')) or url_or_none(post.attrib.get('reblogged-from-url')) or post_url
         if not post_url and og_url:
             post_url = og_url
 
+        # attribute to the original poster, not the reblogger
+        orig_blog = (post.attrib.get('reblogged-root-name')
+                     or _blog_name_from_url(url_or_none(post.attrib.get('reblogged-root-url')))
+                     or post.attrib.get('reblogged-from-name')
+                     or _blog_name_from_url(url_or_none(post.attrib.get('reblogged-from-url')))
+                     or blog)
+        attribution = {
+            'uploader': orig_blog,
+            'uploader_id': orig_blog,
+            'uploader_url': f'https://{orig_blog}.tumblr.com/',
+            'channel': orig_blog,
+            'channel_id': orig_blog,
+            'channel_url': f'https://{orig_blog}.tumblr.com/',
+        }
+
+        # root post id/slug, e.g. .../post/<id>/<slug> or .../<blog>/<id>/<slug>
+        root_slug = None
+        if og_url:
+            mobj = (re.search(r'/post/(?P<id>\d+)(?:/(?P<slug>[^/?#]+))?', og_url)
+                    or re.search(r'tumblr\.com/(?:blog/view/)?[^/?#]+/(?P<id>\d+)(?:/(?P<slug>[^/?#]+))?', og_url))
+            if mobj:
+                root_slug = mobj.group('slug')
+        eff_slug = slug or root_slug
+
+        # description from caption/body
+        caption = post.find('video-caption')
+        if caption is None:
+            caption = post.find('regular-body')
+        description = clean_html(caption.text) if caption is not None else None
+
         # Look for a video URL
-        self.to_screen(f'Looking for video in {pid}-{slug}...')
+        self.write_debug(f'Looking for video in {pid}-{slug}...')
         # TODO see if we can learn anything else from the main extractor,
         #      such as finding multiple/best format;
         #      it seems like the best one comes up first so we are OK)
@@ -41,29 +87,30 @@ class PoculumIE(InfoExtractor):
         if video is None:
             video = post.find('regular-body')
         if video is not None:
-            for link in video.text.split('"'):
+            thumbnail = url_or_none(self._search_regex(
+                r'poster=(["\'])(?P<u>.+?)\1', video.text or '', 'thumbnail',
+                group='u', default=None))
+            for link in (video.text or '').split('"'):
                 if re.match(r"^https?\:\/\/.+\.mp4$", link):
-                    self.to_screen(f"Found video {link} !")
+                    self.write_debug(f"Found video {link} !")
                     return {
-                        "id": url_basename(link),  # TODO this should really be the ID portion of the filename only
-                        "title": slug or f"{blog}-{pid}",  # TODO try to use post title
-                        "uploader_id": uploader_id,
-                        "uploader": uploader_id,
-                        "channel_id": blog,
-                        "channel": blog,
-                        "channel_url": f'https://{blog}.tumblr.com/',
-                        'uploader_url': f'https://{uploader_id}.tumblr.com/',
+                        "id": self._search_regex(
+                            r'(tumblr_\w+?)(?:_\d+)?\.mp4$', link, 'video id',
+                            default=None) or url_basename(link),
+                        "title": eff_slug or f"{blog}-{pid}",  # TODO try to use post title
+                        **attribution,
                         'repost_count': repost_count,
                         "url": link,
-                        "display_id": f"{blog}-{pid}-{slug}" if slug else f"{blog}-{pid}",
+                        "display_id": f"{blog}-{pid}-{eff_slug}" if eff_slug else f"{blog}-{pid}",
                         "ext": "mp4",
                         "is_live": False,
                         "protocol": "https",
                         "timestamp": timestamp,
-                        "webpage_url": og_url
-                        # TODO "description" (video-caption or regular-body)?
+                        "webpage_url": og_url,
+                        "original_url": post_url,
+                        "description": description,
+                        "thumbnail": thumbnail
                         # TODO duration
-                        # TODO thumbnail
                     }
 
         # Nothing found, fallback
@@ -74,35 +121,39 @@ class PoculumIE(InfoExtractor):
             return None
         fixed_url = post_url.replace('/blog/view/', '/')
         self.report_warning(f"Can't find video; fallback on main extractor for {fixed_url}")
-        return self.url_result(fixed_url, 'Tumblr', pid)
+        return self.url_result(fixed_url, 'Tumblr', pid, url_transparent=True, **attribution)
 
-    def _blog_entries(self, blog):
+    def _blog_entries(self, blog, post_id=None):
         url = f'http://{blog}.tumblr.com/api/read'
-        self.to_screen(f'API URL "{url}" identified')
+        self.write_debug(f'API URL "{url}" identified')
         for page_num in itertools.count():
-            #self.to_screen(f'Page of {page_num * self._PAGE_LIMIT} to {self._PAGE_LIMIT}')
-            webpage = self._download_xml(url,
-                                         video_id=blog,
-                                         note=f'Downloading Tumblr blog page {page_num+1}',
-                                         query={"start": str(page_num * self._PAGE_LIMIT),
-                                                "num": str(self._PAGE_LIMIT)})
+            if post_id:
+                query = {"id": post_id}
+                note = f'Downloading post {post_id}'
+            else:
+                query = {"start": str(page_num * self._PAGE_LIMIT),
+                         "num": str(self._PAGE_LIMIT)}
+                note = f'Downloading blog page {page_num+1}'
+            webpage = self._download_xml(url, video_id=blog, note=note, query=query)
             posts_top = webpage.find('posts')
             if posts_top is None:
                 break
             posts = posts_top.findall('post')
-            #self.to_screen(f'Got {len(posts)} posts')
             if not posts:
                 break
             for post in posts:
                 entry = self._extract_entry(post, blog)
                 if entry:
                     yield entry
+            if post_id:
+                break
 
     def _real_extract(self, url):
-        #self.to_screen(f'URL "{url}" being processed by poculum')
-        blog_1, blog_2 = self._match_valid_url(url).groups()
-        blog = blog_2 or blog_1
-        return self.playlist_result(self._blog_entries(blog), playlist_id=blog, playlist_title=blog)
+        mobj = self._match_valid_url(url)
+        blog_1, blog_2, blog_3, post_id = mobj.group(
+            'blog_name_1', 'blog_name_2', 'blog_name_3', 'post_id')
+        blog = blog_3 or blog_2 or blog_1
+        return self.playlist_result(self._blog_entries(blog, post_id), playlist_id=blog, playlist_title=blog)
 
     def _get_automatic_captions(self, *args, **kwargs):
         self.report_warning('Automatic captions are not supported in this extractor')
